@@ -2,9 +2,9 @@
 #!/home/openhabian/Python3/Python-3.7.4/python -u
 #-u to unbuffer output. Otherwise when calling with nohup or redirecting output things are printed very lately or would even mixup
 
-print("---------------------------------------------")
-print("MiTemperature2 / ATC Thermometer version 3.1")
-print("---------------------------------------------")
+#print("---------------------------------------------")
+#print("MiTemperature2 / ATC Thermometer version 3.1")
+#print("---------------------------------------------")
 
 from bluepy import btle
 import argparse
@@ -513,22 +513,22 @@ if args.device:
 		# Perhaps do something else here
 
 elif args.atc:
-	print("Script started in ATC Mode")
-	print("----------------------------")
-	print("In this mode all devices within reach are read out, unless a devicelistfile and --onlydevicelist is specified.")
-	print("Also --name Argument is ignored, if you require names, please use --devicelistfile.")
-	print("In this mode rounding and debouncing are not available, since ATC firmware sends out only one decimal place.")
-	print("ATC mode usually requires root rights. If you want to use it with normal user rights, \nplease execute \"sudo setcap cap_net_raw,cap_net_admin+eip $(eval readlink -f `which python3`)\"")
-	print("You have to redo this step if you upgrade your python version.")
-	print("----------------------------")
-
+	#print("Script started in ATC Mode")
+	#print("----------------------------")
+	# print("In this mode all devices within reach are read out, unless a devicelistfile and --onlydevicelist is specified.")
+	# print("Also --name Argument is ignored, if you require names, please use --devicelistfile.")
+	# print("In this mode rounding and debouncing are not available, since ATC firmware sends out only one decimal place.")
+	# print("ATC mode usually requires root rights. If you want to use it with normal user rights, \nplease execute \"sudo setcap cap_net_raw,cap_net_admin+eip $(eval readlink -f `which python3`)\"")
+	# print("You have to redo this step if you upgrade your python version.")
+	# print("----------------------------")
+	import pandas as pd
+	from influxdb import DataFrameClient
 	import sys
 	import bluetooth._bluetooth as bluez
 
 	from bluetooth_utils import (toggle_device,
 								enable_le_scan, parse_le_advertising_events,
 								disable_le_scan, raw_packet_to_str)
-
 	advCounter=dict() 
 	sensors = dict()
 	if args.devicelistfile:
@@ -585,7 +585,7 @@ elif args.atc:
 					lastAdvNumber = None
 				if lastAdvNumber == None or lastAdvNumber != advNumber:
 					advCounter[macStr] = advNumber
-					print("BLE packet: %s %02x %s %d" % (mac, adv_type, data_str, rssi))
+					#print("BLE packet: %s %02x %s %d" % (mac, adv_type, data_str, rssi))
 					#print("AdvNumber: ", advNumber)
 					#temp = data_str[22:26].encode('utf-8')
 					#temperature = int.from_bytes(bytearray.fromhex(data_str[22:26]),byteorder='big') / 10.
@@ -599,16 +599,80 @@ elif args.atc:
 
 					#temperature = int(data_str[22:26],16) / 10.
 					temperature = int.from_bytes(bytearray.fromhex(atcData_str[12:16]),byteorder='big',signed=True) / 10.
-					print("Temperature: ", temperature)
+					#print("Temperature: ", temperature)
 					humidity = int(atcData_str[16:18], 16)
-					print("Humidity: ", humidity)
+					#print("Humidity: ", humidity)
 					batteryVoltage = int(atcData_str[20:24], 16) / 1000
-					print ("Battery voltage:", batteryVoltage,"V")
-					print ("RSSI:", rssi, "dBm")
+					#print ("Battery voltage:", batteryVoltage,"V")
+					#print ("RSSI:", rssi, "dBm")
 
 					#if args.battery:
 					batteryPercent = int(atcData_str[18:20], 16)
-					print ("Battery:", batteryPercent,"%")
+					#print ("Battery:", batteryPercent,"%")
+					now=time.strftime('%y-%m-%d %H:%M:%S')
+					
+					lsfinaldata = [now,mac,temperature,humidity,batteryPercent]
+					headers=['date','temp','hum','bat']
+					infinaldata = [[now,temperature,humidity,batteryPercent]]
+					df = pd.DataFrame(infinaldata, columns = headers)
+					df['date'] = pd.to_datetime(df['date'],yearfirst=True)
+					df = df.set_index('date')
+					for i in range(len(lsfinaldata)):
+						lsfinaldata[i]=str(lsfinaldata[i])
+					finaldata=",".join(lsfinaldata)
+					print(finaldata)
+					host = 'localhost'
+					port = 8086
+					user = 'queti123'
+					password = 'Yb171Ba133'
+					dbname = 'realtempdata'
+					protocol = 'line'
+					
+					
+					client = DataFrameClient(host, port, user, password, dbname)
+					
+					if mac == "A4:C1:38:FD:57:03":
+						with open("Temp1.csv", "a") as f:
+							f.write(finaldata)
+							f.write("\n")
+						
+						client.write_points(df, "temp1",  protocol=protocol)
+					elif mac == "A4:C1:38:98:71:FD":
+						with open("Temp2.csv", "a") as f:
+							f.write(finaldata)
+							f.write("\n")
+						
+						client.write_points(df, "temp2", protocol=protocol)	
+						
+					elif mac == "A4:C1:38:73:AA:87":
+						with open("Temp3.csv", "a") as f:
+							f.write(finaldata)
+							f.write("\n")
+						
+						client.write_points(df, "temp3", protocol=protocol)	
+						
+					elif mac == "A4:C1:38:F2:F4:AB":
+						with open("Temp4.csv", "a") as f:
+							f.write(finaldata)
+							f.write("\n")
+						
+						client.write_points(df, "temp4", protocol=protocol)	
+						
+					elif mac == "A4:C1:38:4B:3E:F7":
+						with open("Temp5.csv", "a") as f:
+							f.write(finaldata)
+							f.write("\n")
+							
+						client.write_points(df, "temp5", protocol=protocol)	
+						
+					elif mac == "A4:C1:38:FE:A2:90":
+						with open("Tempout.csv", "a") as f:
+							f.write(finaldata)
+							f.write("\n")
+						
+						client.write_points(df, "tempout", protocol=protocol)	
+						
+
 					measurement.battery = batteryPercent
 					measurement.humidity = humidity
 					measurement.temperature = temperature
